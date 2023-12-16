@@ -6,6 +6,7 @@ from random import randint, choice, choices
 import numpy as np
 from PIL import Image
 import lorem
+import magic
 
 def normalize(text):
     translit = {
@@ -39,16 +40,31 @@ def generate_text_files(path):
         f.write(random_text)
 
 
+
+
 # АРХІВИ
 def generate_archive_files(path):
     archives = ('zip', 'tar.gz', 'tar')
     filename = f"{get_random_filename()}.{choice(archives)}"
     shutil.make_archive(path / filename.split('.')[0], choice(archives), path)
 def extract_archive(archive_path, extract_to):
-    # Розпаковую архів
-    shutil.unpack_archive(archive_path, extract_to)
-    # Видаляю
-    os.remove(archive_path)
+    archive_name = Path(archive_path).stem 
+    try:
+        shutil.unpack_archive(archive_path, extract_to)
+    except Exception as e:
+        print(f"Failed to extract {archive_name}: {e}")
+        # Якщо розпакування не вдалося, видаляємо
+        os.remove(archive_path)
+        return
+    # Переносимо 
+    destination_folder = Path(extract_to) / 'archives' / archive_name
+    if not destination_folder.exists():
+        destination_folder.mkdir(parents=True)
+    for item in os.listdir(extract_to):
+        shutil.move(os.path.join(extract_to, item), str(destination_folder))
+
+
+
 
 
 
@@ -59,6 +75,8 @@ def generate_image(path):
     image = Image.fromarray(image_array.astype('uint8'))
     image.save(path / filename)
 
+
+
 def generate_folders(path, num_folders):
     folder_names = ['temp', 'folder', 'dir', 'tmp', 'OMG', 'is_it_true', 'no_way', 'find_it']
     weights = [10, 10, 1, 1, 1, 1, 1, 1]
@@ -66,18 +84,46 @@ def generate_folders(path, num_folders):
     for _ in range(num_folders):
         num_subfolders = randint(1, 3) 
         new_folder = path / Path(*choices(folder_names, weights=weights, k=randint(1, len(folder_names))))
-        new_folder.mkdir(parents=True, exist_ok=True)
-        generate_files(new_folder, randint(3, 5), num_subfolders)
+        
+        # Перевірка, чи не потрапляємо у папки, які потрібно ігнорувати
+        if new_folder.name.lower() not in ['archives', 'video', 'audio', 'documents', 'images', 'others']:
+            new_folder.mkdir(parents=True, exist_ok=True)
+            generate_files(new_folder, randint(3, 5), num_subfolders)
+
+
+
+# ТИП ФАЙЛУ ВИЗНАЧ
+def get_file_extension(file_path):
+    mime = magic.Magic(mime=True)
+    file_type = mime.from_file(file_path)
+    return file_type    
+
+
+
+def get_extensions_in_folder(folder_path):
+    extensions = set()
+    for file_name in os.listdir(folder_path):
+        _, extension = os.path.splitext(file_name)
+        extensions.add(extension)
+    return extensions
+target_folder = 'шлях_до_цільової_папки'
+all_extensions = get_extensions_in_folder(target_folder)
+print(all_extensions)
 
 
 # ГЕНЕРУВАННЯ І НОВА НАЗВА
 def generate_files(path, num_files, num_folders):
     for _ in range(num_files):
         file_types = [generate_text_files, generate_archive_files, generate_image]
-        choice(file_types)(path)
+        chosen_file_type = choice(file_types)
+        chosen_file_type(path)
+        file_extension = get_file_extension(chosen_file_type)
     generate_folders(path, num_folders)
     rename_files(path)  #  перейменування файлів
     delete_empty_folders(path) #  видалення порожніх папок
+    all_extensions = get_extensions_in_folder(path)
+    print("Усі розширення у папці:", all_extensions)
+
 
 def rename_files(directory):
     for path, _, files in os.walk(directory):
